@@ -1,7 +1,6 @@
 import pygame
 import sys
 import random
-import traceback
 
 from settings import *
 from utils import load_image, load_sound
@@ -98,7 +97,7 @@ class Menu:
                 if event.type == pygame.QUIT:
                     return "quit"
                 if self.start_button.is_clicked(mouse_pos, event):
-                    return "game"
+                    return "story"  # Start Story Screen first before game
                 if self.quit_button.is_clicked(mouse_pos, event):
                     return "quit"
 
@@ -156,7 +155,6 @@ class GameOverScreen:
             pygame.display.flip()
             self.clock.tick(FPS)
 
-# main game loop
 # Flash screen animation before Game Over
 def flash_screen(screen, duration=400):
     flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -165,7 +163,7 @@ def flash_screen(screen, duration=400):
     while pygame.time.get_ticks() - start_time < duration:
         screen.blit(flash_surface, (0, 0))
         pygame.display.flip()
-
+#Main game loop
 def game_loop(screen):
     clock = pygame.time.Clock()
     stars = [Star() for _ in range(50)]
@@ -198,7 +196,7 @@ def game_loop(screen):
         return "menu"
 
     score = 0
-    health = 3
+    health = 10
     if not hasattr(game_loop, "high_score"):
         game_loop.high_score = 0
     font = pygame.font.Font(None, 30)
@@ -221,7 +219,7 @@ def game_loop(screen):
         if enemy_spawn_timer >= ENEMY_SPAWN_RATE:
             enemy = Enemy(random.randint(30, SCREEN_WIDTH - 30), -50, enemy_img)
             enemies.add(enemy)
-            enemy_spawn_timer = 0
+            enemy_spawn_timer = 5
         else:
             enemy_spawn_timer += 1
 
@@ -237,21 +235,20 @@ def game_loop(screen):
             if hit:
                 bullet.kill()
                 for e in hit:
-                    explosions.add(Explosion(e.rect.centerx, e.rect.centery, frames, scale=1.2))
-                    score += 100
-                    explosion_sound.play()
-
-        for enemy in enemies:
-            if player.rect.colliderect(enemy.rect):
-                enemies.remove(enemy)
-                explosions.add(Explosion(player.rect.centerx, player.rect.centery, frames, scale=1.5))
-                health -= 1
+                    explosions.add(Explosion(e.rect.centerx, e.rect.centery, frames, scale=1.5, speed=4))
+                score += 100
                 explosion_sound.play()
-                if health <= 0:
-                    flash_screen(screen, duration=400)  # <-- Flash animation added here
-                    pygame.time.delay(200)               # Short pause after flash
-                    game_loop.high_score = max(score, game_loop.high_score)
-                    return GameOverScreen(screen, score, game_loop.high_score).run()
+
+        hits = pygame.sprite.spritecollide(player, enemies, True)
+        if hits:
+            health -= 1
+            explosions.add(Explosion(player.rect.centerx, player.rect.centery, frames, scale=2, speed=4))
+            explosion_sound.play()
+            if health <= 0:
+                flash_screen(screen)
+                if score > game_loop.high_score:
+                    game_loop.high_score = score
+                return "game_over", score, game_loop.high_score
 
         screen.fill(bg_color)
         for star in stars:
@@ -261,26 +258,111 @@ def game_loop(screen):
         enemies.draw(screen)
         explosions.draw(screen)
 
-        screen.blit(font.render(f"Score: {score}", True, (255, 255, 255)), (10, 10))
-        screen.blit(font.render(f"Health: {health}", True, (255, 100, 100)), (10, 40))
+        score_text = font.render(f"Score: {score}", True, (255, 255, 255))
+        health_text = font.render(f"Health: {health}", True, (255, 0, 0))
+        screen.blit(score_text, (10, 10))
+        screen.blit(health_text, (SCREEN_WIDTH - 120, 10))
+        
+        
 
         pygame.display.flip()
 
-# Entry point
+# Story screen showing a simple narrative with Continue button
+class StoryScreen:
+    def __init__(self, screen):
+        self.screen = screen
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font("assets/font/ARCADE_R.TTF", 12)
+        self.small_font = pygame.font.Font(None, 12)
+        self.text_lines = [
+            "In the year 2100, humanity fights for survival...",
+            "You are the last hope to defend Earth from alien invaders.",
+            "Prepare your spaceship, sharpen your skills, and",
+            "blast your way through waves of enemies.",
+            "",
+            "Good luck, pilot!"
+        ]
+        button_width = 200
+        button_height = 50
+        self.continue_button = Button(SCREEN_WIDTH//2 - button_width//2, SCREEN_HEIGHT - 100, button_width, button_height, "Continue", (0, 100, 0), (0, 150, 0))
+        self.background = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.background.fill((5, 5, 20))
+        self.stars = [Star() for _ in range(80)]
+
+    def run(self):
+        while True:
+            mouse_pos = pygame.mouse.get_pos()
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return "quit"
+                if self.continue_button.is_clicked(mouse_pos, event):
+                    return "game"
+
+            for star in self.stars:
+                star.update()
+
+            self.continue_button.check_hover(mouse_pos)
+            self.screen.blit(self.background, (0, 0))
+            for star in self.stars:
+                star.draw(self.screen)
+
+            # Draw the text lines centered horizontally
+            start_y = SCREEN_HEIGHT // 4
+            for i, line in enumerate(self.text_lines):
+                rendered_text = self.font.render(line, True, (255, 255, 255))
+                rect = rendered_text.get_rect(center=(SCREEN_WIDTH//2, start_y + i * 35))
+                self.screen.blit(rendered_text, rect)
+
+            self.continue_button.draw(self.screen)
+            pygame.display.flip()
+            self.clock.tick(FPS)
+
 def main():
     pygame.init()
+    pygame.mixer.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("2100: Space Adventure")
+    current_screen = "menu"
+    score = 0
+    high_score = 0
+
+    menu = Menu(screen)
+    story = StoryScreen(screen)
+    game_over_screen = None
 
     while True:
-        menu = Menu(screen)
-        state = menu.run()
+        if current_screen == "menu":
+            result = menu.run()
+            if result == "story":
+                current_screen = "story"
+            elif result == "quit":
+                break
 
-        if state == "quit":
-            break
-        elif state == "game":
-            state = game_loop(screen)
-            if state == "quit":
+        elif current_screen == "story":
+            result = story.run()
+            if result == "game":
+                current_screen = "game"
+            elif result == "quit":
+                break
+
+        elif current_screen == "game":
+            result = game_loop(screen)
+            if isinstance(result, tuple) and result[0] == "game_over":
+                _, score, high_score = result
+                game_over_screen = GameOverScreen(screen, score, high_score)
+                current_screen = "game_over"
+            elif result == "menu":
+                current_screen = "menu"
+            elif result == "quit":
+                break
+
+        elif current_screen == "game_over":
+            result = game_over_screen.run()
+            if result == "game":
+                current_screen = "game"
+            elif result == "menu":
+                current_screen = "menu"
+            elif result == "quit":
                 break
 
     pygame.quit()

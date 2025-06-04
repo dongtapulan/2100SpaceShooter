@@ -1,6 +1,6 @@
 # src/settings.py
 
-PLAYER_HEALTH = 3
+PLAYER_HEALTH = 10
 SCORE_FONT_SIZE = 28
 FONT_NAME = 'ARCADE_R.TTF'
 # Game window

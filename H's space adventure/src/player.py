@@ -3,7 +3,7 @@ import time
 
 # Define screen dimensions
 SCREEN_WIDTH = 800  # Set this to your game's screen width
-SCREEN_HEIGHT = 600  # Set this to your game's screen height
+SCREEN_HEIGHT = 640  # Set this to your game's screen height
 
 class Player(pygame.sprite.Sprite):
     def __init__(self, x, y, image):
